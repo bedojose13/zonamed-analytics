@@ -35,7 +35,7 @@ from app.models import (
 )
 
 SEED = 20260812
-TODAY = dt.date(2026, 8, 12)
+TODAY = dt.date.today()  # ancla el calendario sintético a la fecha real de cuando se siembra la base
 
 # (nombre, abreviatura, ciudad, estadio, altitud_m, temp_media_c, humedad_media_%)
 DIMAYOR_TEAMS = [
