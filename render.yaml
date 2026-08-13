@@ -4,7 +4,7 @@
 services:
   - type: web
     name: zonamed-api
-    env: docker
+    runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
