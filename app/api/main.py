@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import analisis, jugados, proximos
-from app.core.bootstrap import bootstrap_if_needed
+from app.core import bootstrap
 from app.core.config import get_settings
 from app.core.database import init_db
 
@@ -37,12 +37,16 @@ app.include_router(jugados.router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    # init_db() (CREATE TABLE IF NOT EXISTS) es rápido y se corre aquí mismo para que las tablas
+    # existan casi de inmediato; el seed/entrenamiento (lento contra una base remota) se manda a
+    # un hilo aparte para no retrasar la apertura del puerto — ver app/core/bootstrap.py.
+    init_db()
     if settings.auto_bootstrap:
-        bootstrap_if_needed()
+        bootstrap.bootstrap_in_background()
     else:
-        init_db()
+        bootstrap.status.update(stage="ready", detail="Auto-bootstrap desactivado.")
 
 
 @app.get("/", tags=["Salud"])
 def health_check() -> dict:
-    return {"status": "ok", "app": settings.app_name}
+    return {"status": "ok", "app": settings.app_name, "bootstrap": bootstrap.status}
