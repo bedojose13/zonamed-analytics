@@ -4,7 +4,7 @@ histórico (seed inicial o job periódico de refresco) para que la API pueda lee
 consolidados sin recalcularlos en cada request."""
 from __future__ import annotations
 
-from sqlalchemy import Float, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Match, MatchStatus, Player, PlayerMatchStat
@@ -13,8 +13,10 @@ MIN_LEAGUE_AVG_YELLOW_RATE = 0.05  # guarda contra división por ~0 en ligas/tem
 
 
 def refresh_player_aggregates(db: Session) -> None:
+    # Nota: Postgres NO permite CAST(boolean AS float/integer) como sí lo tolera SQLite —
+    # de ahí el CASE WHEN explícito en vez de func.cast(..., Float) sobre una columna booleana.
     league_avg_yellow = db.execute(
-        select(func.avg(func.cast(PlayerMatchStat.yellow_card, Float)))
+        select(func.avg(case((PlayerMatchStat.yellow_card, 1.0), else_=0.0)))
         .join(Match, Match.id == PlayerMatchStat.match_id)
         .where(Match.status == MatchStatus.FINISHED)
     ).scalar() or MIN_LEAGUE_AVG_YELLOW_RATE
