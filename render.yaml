@@ -1,0 +1,16 @@
+# Blueprint de Render: en el dashboard usa "New +" -> "Blueprint" y apunta a este repo para que
+# Render cree el servicio automáticamente a partir de este archivo, en vez de configurarlo a
+# mano campo por campo.
+services:
+  - type: web
+    name: zonamed-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: ZONAMED_DATABASE_URL
+        sync: false   # pégala tú en el dashboard (connection string de Neon) — no va en el repo
+      - key: ZONAMED_AUTO_BOOTSTRAP
+        value: "true"

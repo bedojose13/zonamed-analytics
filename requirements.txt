@@ -1,0 +1,32 @@
+# NOTA: sin pines de versión exactos a propósito. Python 3.14 es muy reciente y varias
+# librerías científicas (numpy/scipy/scikit-learn/xgboost/statsmodels) solo publican wheels
+# compatibles para las versiones más nuevas de cada paquete. pip resolverá automáticamente la
+# combinación más reciente compatible entre sí y con tu intérprete.
+
+# ---- Núcleo / API ----
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+SQLAlchemy
+psycopg[binary]   # driver Postgres — usado en producción (Neon/Render); SQLite no lo necesita
+
+# ---- Ciencia de datos ----
+numpy
+pandas
+scipy
+scikit-learn
+xgboost
+statsmodels
+joblib
+
+# ---- Utilidades ----
+python-dateutil
+
+# ---- Frontend ----
+streamlit
+plotly
+requests
+
+# ---- Dev / Test ----
+pytest

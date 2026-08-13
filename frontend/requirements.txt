@@ -1,0 +1,7 @@
+# Dependencias SOLO del frontend — Streamlit Community Cloud instala este archivo (el que está
+# junto al entrypoint) en vez del requirements.txt raíz, evitando instalar XGBoost/statsmodels
+# (pesados) en un servicio que nunca los usa: solo llama a la API por HTTP.
+streamlit
+pandas
+plotly
+requests

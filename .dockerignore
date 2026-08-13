@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+zonamed.db
+artifacts/
+.env
+*.log
+frontend/
+.git/
