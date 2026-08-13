@@ -14,6 +14,7 @@ from app.api.routers import analisis, jugados, proximos
 from app.core import bootstrap
 from app.core.config import get_settings
 from app.core.database import init_db
+from app.services import espn_api
 
 settings = get_settings()
 
@@ -63,3 +64,13 @@ def trigger_sync(token: str) -> dict:
         return {"status": "already_running", "bootstrap": bootstrap.status}
     bootstrap.bootstrap_in_background()
     return {"status": "sync_started", "bootstrap": bootstrap.status}
+
+
+@app.get("/admin/test-espn", tags=["Admin"])
+def test_espn_connectivity(token: str) -> dict:
+    """Diagnóstico: ¿el servidor de Render logra conectarse a la API no oficial de ESPN (que sí
+    cubre la temporada en curso)? No guarda nada, solo reporta el resultado. Ver
+    app/services/espn_api.py."""
+    if not settings.admin_sync_token or token != settings.admin_sync_token:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    return espn_api.test_connectivity()
