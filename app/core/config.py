@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     # donde no hay terminal para correr los scripts a mano antes del primer request)
     auto_bootstrap: bool = True
 
+    # Ingesta de datos reales (API-Football — https://www.api-football.com/)
+    football_api_key: str = ""
+    football_api_base_url: str = "https://v3.football.api-sports.io"
+    football_league_id: int = 239   # Colombia - Primera A (Liga BetPlay Dimayor)
+    football_season: int = 2024     # el plan free solo cubre 2022-2024, no la temporada en curso
+    football_calls_per_run: int = 80   # margen bajo el límite de 100/día del plan gratuito
+    admin_sync_token: str = ""      # requerido para llamar POST /admin/sync manualmente
+
     def ensure_dirs(self) -> None:
         self.models_dir.mkdir(parents=True, exist_ok=True)
 

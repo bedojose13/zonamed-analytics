@@ -25,13 +25,24 @@ if not partidos:
 df = pd.DataFrame(partidos)
 df["partido"] = df["home_team"].apply(lambda t: t["short_name"]) + " vs " + df["away_team"].apply(lambda t: t["short_name"])
 df["marcador_real"] = df["real_home_goals"].astype(str) + "-" + df["real_away_goals"].astype(str)
+df_stats = df[df["stats_available"]]  # córners/tarjetas reales solo llegan tras el backfill por partido
 
 st.subheader("Panel comparativo: margen de acierto de la IA")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Partidos auditados", len(df))
 col2.metric("Acierto de signo 1X2", f"{df['result_hit'].mean()*100:.1f}%")
-col3.metric("Error medio de córners (MAE)", f"{df['corners_error_abs'].mean():.2f}")
-col4.metric("Error medio de tarjetas (MAE)", f"{df['cards_error_abs'].mean():.2f}")
+if len(df_stats):
+    col3.metric("Error medio de córners (MAE)", f"{df_stats['corners_error_abs'].mean():.2f}")
+    col4.metric("Error medio de tarjetas (MAE)", f"{df_stats['cards_error_abs'].mean():.2f}")
+else:
+    col3.metric("Error medio de córners (MAE)", "—")
+    col4.metric("Error medio de tarjetas (MAE)", "—")
+
+if len(df_stats) < len(df):
+    st.caption(
+        f"⏳ {len(df_stats)}/{len(df)} partidos tienen ya estadísticas reales de córners/tarjetas "
+        "(el backfill histórico avanza solo, unos ~80 partidos por día por el límite de la API gratuita)."
+    )
 
 tab_tabla, tab_goles, tab_corners, tab_cards = st.tabs(["Tabla comparativa", "Goles", "Córners", "Tarjetas"])
 
@@ -59,17 +70,25 @@ with tab_goles:
     st.plotly_chart(fig, use_container_width=True)
 
 with tab_corners:
-    df["real_total_corners"] = df["real_home_corners"] + df["real_away_corners"]
-    df["proyectado_total_corners"] = df["projected_home_corners"] + df["projected_away_corners"]
-    fig = px.scatter(df, x="proyectado_total_corners", y="real_total_corners", hover_name="partido",
-                      title="Córners totales: proyectado vs. real")
-    fig.add_shape(type="line", x0=0, y0=0, x1=df["real_total_corners"].max() + 1, y1=df["real_total_corners"].max() + 1)
-    st.plotly_chart(fig, use_container_width=True)
+    if not len(df_stats):
+        st.info("Todavía no hay partidos con córners reales backfilled — vuelve en unas horas.")
+    else:
+        df_stats["real_total_corners"] = df_stats["real_home_corners"] + df_stats["real_away_corners"]
+        df_stats["proyectado_total_corners"] = df_stats["projected_home_corners"] + df_stats["projected_away_corners"]
+        fig = px.scatter(df_stats, x="proyectado_total_corners", y="real_total_corners", hover_name="partido",
+                          title="Córners totales: proyectado vs. real")
+        top = df_stats["real_total_corners"].max() + 1
+        fig.add_shape(type="line", x0=0, y0=0, x1=top, y1=top)
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab_cards:
-    df["real_total_cards"] = (df["real_home_yellow_cards"] + df["real_away_yellow_cards"]
-                               + df["real_home_red_cards"] + df["real_away_red_cards"])
-    fig = px.scatter(df, x="projected_total_cards", y="real_total_cards", hover_name="partido",
-                      title="Tarjetas totales: proyectado vs. real")
-    fig.add_shape(type="line", x0=0, y0=0, x1=df["real_total_cards"].max() + 1, y1=df["real_total_cards"].max() + 1)
-    st.plotly_chart(fig, use_container_width=True)
+    if not len(df_stats):
+        st.info("Todavía no hay partidos con tarjetas reales backfilled — vuelve en unas horas.")
+    else:
+        df_stats["real_total_cards"] = (df_stats["real_home_yellow_cards"] + df_stats["real_away_yellow_cards"]
+                                         + df_stats["real_home_red_cards"] + df_stats["real_away_red_cards"])
+        fig = px.scatter(df_stats, x="projected_total_cards", y="real_total_cards", hover_name="partido",
+                          title="Tarjetas totales: proyectado vs. real")
+        top = df_stats["real_total_cards"].max() + 1
+        fig.add_shape(type="line", x0=0, y0=0, x1=top, y1=top)
+        st.plotly_chart(fig, use_container_width=True)

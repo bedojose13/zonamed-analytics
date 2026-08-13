@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,6 +18,10 @@ class Match(Base):
     __tablename__ = "matches"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    external_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
+    # True una vez se trajo /fixtures/statistics para este partido (llamada aparte, limitada por
+    # el cupo diario de la API — puede haber partidos FINISHED con esto todavía en False).
+    stats_synced: Mapped[bool] = mapped_column(Boolean, default=False)
 
     home_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)
     away_team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)

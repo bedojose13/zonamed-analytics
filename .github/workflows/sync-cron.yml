@@ -1,0 +1,15 @@
+name: Sync diario de datos reales
+
+on:
+  schedule:
+    - cron: "0 13 * * *"   # todos los días 13:00 UTC (~8:00 a.m. Colombia)
+  workflow_dispatch: {}     # también se puede disparar a mano desde la pestaña Actions
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar POST /admin/sync
+        run: |
+          curl -X POST "${{ secrets.ZONAMED_API_URL }}/admin/sync?token=${{ secrets.ZONAMED_ADMIN_SYNC_TOKEN }}" \
+            --fail --silent --show-error

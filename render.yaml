@@ -14,3 +14,7 @@ services:
         sync: false   # pégala tú en el dashboard (connection string de Neon) — no va en el repo
       - key: ZONAMED_AUTO_BOOTSTRAP
         value: "true"
+      - key: ZONAMED_FOOTBALL_API_KEY
+        sync: false   # tu API key gratuita de https://dashboard.api-football.com
+      - key: ZONAMED_ADMIN_SYNC_TOKEN
+        sync: false   # cualquier texto secreto que inventes, para poder llamar POST /admin/sync

@@ -40,6 +40,11 @@ class LeagueAverages:
 
 
 def compute_league_averages(db: Session) -> LeagueAverages:
+    """Con datos reales, los goles de un partido FINISHED siempre se conocen (vienen del propio
+    calendario), pero córners/faltas solo están disponibles para los partidos ya alcanzados por
+    el backfill incremental (`Match.stats_synced`) — ver app/scripts/sync_real_data.py. Por eso
+    se promedian sobre subconjuntos distintos en vez de asumir que todo partido FINISHED trae
+    ambos datos."""
     finished = select(Match).where(Match.status == MatchStatus.FINISHED)
     matches = db.execute(finished).scalars().all()
     if not matches:
@@ -47,8 +52,15 @@ def compute_league_averages(db: Session) -> LeagueAverages:
 
     n_team_matches = len(matches) * 2
     goals_for = sum(m.home_goals + m.away_goals for m in matches) / n_team_matches
-    corners_for = sum(m.home_corners + m.away_corners for m in matches) / n_team_matches
-    fouls_for = sum(m.home_fouls + m.away_fouls for m in matches) / n_team_matches
+
+    with_stats = [m for m in matches if m.stats_synced and m.home_corners is not None]
+    if with_stats:
+        n_stats_matches = len(with_stats) * 2
+        corners_for = sum(m.home_corners + m.away_corners for m in with_stats) / n_stats_matches
+        fouls_for = sum((m.home_fouls or 0) + (m.away_fouls or 0) for m in with_stats) / n_stats_matches
+    else:
+        corners_for = _FALLBACK["corners_for"]
+        fouls_for = _FALLBACK["fouls_for"]
 
     avg_yellow = db.execute(select(func.avg(Referee.avg_yellow_per_match))).scalar()
     yellow_per_match = float(avg_yellow) if avg_yellow else _FALLBACK["yellow_per_match"]

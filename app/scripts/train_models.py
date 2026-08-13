@@ -1,6 +1,8 @@
 """Entrena/calibra todos los componentes del ensemble sobre el histórico de partidos FINISHED
-y guarda los artefactos en `settings.models_dir`. Debe correrse después de `seed_db` (o de
-cualquier ingestión real) y periódicamente conforme se acumulan más partidos jugados.
+y guarda los artefactos en `settings.models_dir`. Debe correrse después de `sync_real_data` (o
+del seed sintético de demo) y se re-corre en cada arranque del proceso — es barato (sin
+llamadas a APIs externas) y así los modelos de córners/tarjetas van mejorando solos a medida
+que el backfill diario de estadísticas reales avanza (ver app/scripts/sync_real_data.py).
 
 Uso:
     python -m app.scripts.train_models
@@ -20,6 +22,8 @@ from app.predictive.xgboost_model import train_goal_models
 from app.services.feature_engineering import build_feature_set
 from app.services.league_baseline import compute_league_averages, save_league_averages
 from app.services.xcards import h2h_intensity_multiplier, referee_strictness
+
+MIN_ROWS_FOR_STATS_MODELS = 40  # ~20 partidos con estadísticas ya backfilled (2 filas c/u)
 
 
 def _finished_matches(db: Session) -> list[Match]:
@@ -44,8 +48,9 @@ def train_goals_and_rho(db: Session, matches: list[Match]) -> None:
 
 
 def train_corners(db: Session, matches: list[Match]) -> None:
+    stats_ready = [m for m in matches if m.stats_synced]
     rows = []
-    for match in matches:
+    for match in stats_ready:
         fs = build_feature_set(db, match, exclude_this_match=True)
         corner_rows = db.execute(
             select(MatchCornerStats).where(MatchCornerStats.match_id == match.id)
@@ -59,14 +64,19 @@ def train_corners(db: Session, matches: list[Match]) -> None:
                 "is_home": float(cs.is_home),
                 "corners_actual": cs.corners_won,
             })
+    if len(rows) < MIN_ROWS_FOR_STATS_MODELS:
+        print(f"  -> Córners: solo {len(rows)} observaciones con estadísticas reales todavía "
+              f"(backfill en curso) — se usa el estimado analítico de liga mientras tanto.")
+        return
     df = pd.DataFrame(rows)
     train_corner_model(df)
-    print(f"  -> Binomial Negativa de córners entrenada sobre {len(df)} observaciones equipo-partido.")
+    print(f"  -> Binomial Negativa de córners entrenada sobre {len(df)} observaciones equipo-partido reales.")
 
 
 def train_cards(db: Session, matches: list[Match]) -> None:
+    stats_ready = [m for m in matches if m.stats_synced]
     team_rows, player_rows = [], []
-    for match in matches:
+    for match in stats_ready:
         fs = build_feature_set(db, match, exclude_this_match=True)
         rivalry = db.execute(select(Rivalry).where(
             ((Rivalry.team_a_id == match.home_team_id) & (Rivalry.team_b_id == match.away_team_id))
@@ -86,6 +96,10 @@ def train_cards(db: Session, matches: list[Match]) -> None:
                 "cards_actual": ds.yellow_cards + ds.red_cards,
             })
 
+        # Nota: no se ingesta detalle por jugador desde la API real (el plan gratuito lo cobraría
+        # aparte en llamadas de alineaciones) — PlayerMatchStat queda vacío y el modelo de riesgo
+        # individual por jugador se omite. `player_rows` se deja declarado por si en el futuro se
+        # agrega esa fuente de datos.
         player_stats = db.execute(
             select(PlayerMatchStat).where(PlayerMatchStat.match_id == match.id)
         ).scalars().all()
@@ -96,17 +110,28 @@ def train_cards(db: Session, matches: list[Match]) -> None:
                 "booked": int(ps.yellow_card),
             })
 
-    train_team_card_model(pd.DataFrame(team_rows))
-    train_player_card_model(pd.DataFrame(player_rows))
-    print(f"  -> GLM tarjetas equipo entrenado sobre {len(team_rows)} filas; "
-          f"GLM tarjetas jugador sobre {len(player_rows)} filas.")
+    if len(team_rows) < MIN_ROWS_FOR_STATS_MODELS:
+        print(f"  -> Tarjetas de equipo: solo {len(team_rows)} observaciones reales todavía "
+              f"(backfill en curso) — se usa el estimado analítico de liga mientras tanto.")
+    else:
+        train_team_card_model(pd.DataFrame(team_rows))
+        print(f"  -> GLM tarjetas equipo entrenado sobre {len(team_rows)} filas reales.")
+
+    if len(player_rows) < MIN_ROWS_FOR_STATS_MODELS:
+        print("  -> Tarjetas por jugador: sin datos reales de jugadores (no se ingestan alineaciones "
+              "en el plan gratuito) — panel de riesgo individual queda desactivado.")
+    else:
+        train_player_card_model(pd.DataFrame(player_rows))
+        print(f"  -> GLM tarjetas jugador entrenado sobre {len(player_rows)} filas.")
 
 
 def run() -> None:
     with session_scope() as db:
         matches = _finished_matches(db)
         if len(matches) < 20:
-            raise SystemExit("Muy pocos partidos FINISHED para entrenar. Corre primero app/scripts/seed_db.py")
+            print(f"Solo hay {len(matches)} partidos FINISHED todavía — se omite el entrenamiento "
+                  "hasta que avance la sincronización (app/scripts/sync_real_data.py).")
+            return
 
         print(f"Entrenando ensemble sobre {len(matches)} partidos históricos...")
 

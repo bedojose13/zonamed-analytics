@@ -1,27 +1,27 @@
 """Auto-inicialización para despliegues en la nube (Render, etc.), donde no hay una terminal
-para correr `seed_db.py`/`train_models.py` a mano antes del primer arranque.
+para correr los scripts a mano antes del primer arranque.
 
-Se ejecuta en el evento `startup` de FastAPI (ver app/api/main.py) y es IDEMPOTENTE:
-  - Solo siembra datos sintéticos si la tabla `teams` está vacía (primera vez contra una base
-    Postgres nueva). En arranques posteriores del mismo servicio, la base ya tiene datos y este
-    paso se salta en milisegundos.
-  - Solo (re)entrena los modelos si falta alguno de los artefactos `.joblib` en `models_dir`.
-    En Render free tier el disco es efímero entre *deploys* (pero persiste durante el sueño/
-    despertar del servicio), así que esto solo cuesta tiempo real justo después de cada deploy.
+Se ejecuta en el evento `startup` de FastAPI (ver app/api/main.py) y es IDEMPOTENTE Y
+RESUMIBLE, a diferencia de la versión anterior basada en datos sintéticos:
+  - `sync_real_data.run()` SIEMPRE se corre (no solo si la base está vacía): trae equipos y
+    calendario reales una sola vez, y cada corrida avanza un poco más el backfill de
+    estadísticas por partido (córners/faltas/tarjetas), respetando el cupo diario de 100
+    llamadas de la API gratuita — ver app/services/sync_state.py. Como el free tier de Render
+    reinicia el proceso cada vez que el servicio despierta de dormir, esto hace que el backfill
+    histórico avance solo con el tráfico normal, sin necesitar un cron aparte (aunque también
+    se puede forzar vía POST /admin/sync, ver app/api/main.py).
+  - El (re)entrenamiento de modelos también se corre siempre: es barato (no llama a la API
+    externa) y así los modelos de córners/tarjetas van mejorando día a día conforme el backfill
+    avanza, en vez de quedar congelados con el primer entrenamiento.
 
-Puede desactivarse con `ZONAMED_AUTO_BOOTSTRAP=false` si prefieres poblar la base tú mismo.
+Puede desactivarse con `ZONAMED_AUTO_BOOTSTRAP=false` si prefieres correr los scripts tú mismo.
 """
 from __future__ import annotations
 
 import threading
 import traceback
 
-from sqlalchemy import func, select
-
-from app.core.config import get_settings
-from app.core.database import init_db, session_scope
-
-settings = get_settings()
+from app.core.database import init_db
 
 # Estado de arranque legible desde el endpoint de salud (ver app/api/main.py). Vive en memoria
 # del proceso: suficiente para un único servicio web como este (no hay múltiples réplicas).
@@ -30,31 +30,18 @@ status: dict = {"stage": "pending", "detail": ""}
 
 def bootstrap_if_needed() -> None:
     init_db()
-    status.update(stage="checking", detail="Verificando si hay datos existentes...")
 
-    from app.models import Team  # import diferido: evita ciclos con app.models -> app.core.database
+    status.update(stage="syncing", detail="Sincronizando datos reales (API-Football)...")
+    print("[bootstrap] Sincronizando datos reales...")
+    from app.scripts import sync_real_data
 
-    with session_scope() as db:
-        team_count = db.execute(select(func.count()).select_from(Team)).scalar_one()
+    sync_real_data.run()
 
-    if team_count == 0:
-        print("[bootstrap] Base de datos vacía: generando datos sintéticos iniciales...")
-        status.update(stage="seeding", detail="Generando datos sintéticos (equipos, partidos, jugadores)...")
-        from app.scripts import seed_db
+    status.update(stage="training", detail="Entrenando/recalibrando el ensemble...")
+    print("[bootstrap] Entrenando el ensemble...")
+    from app.scripts import train_models
 
-        seed_db.run()
-    else:
-        print(f"[bootstrap] Base de datos ya tiene {team_count} equipos, se omite el seed.")
-
-    marker = settings.models_dir / "xgb_home_goals.joblib"
-    if not marker.exists():
-        print("[bootstrap] Artefactos de modelo no encontrados: entrenando el ensemble...")
-        status.update(stage="training", detail="Entrenando el ensemble (puede tardar varios minutos en la nube)...")
-        from app.scripts import train_models
-
-        train_models.run()
-    else:
-        print("[bootstrap] Artefactos de modelo ya presentes, se omite el entrenamiento.")
+    train_models.run()
 
     status.update(stage="ready", detail="Listo.")
 

@@ -50,7 +50,7 @@ class DisciplineRates:
 
 
 def compute_team_discipline_rates(db: Session, team_id: int, before_match_id: int | None = None) -> DisciplineRates:
-    obs = get_recent_matches(db, team_id, before_match_id=before_match_id)
+    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True)
     if not obs:
         avg = load_league_averages()
         return DisciplineRates(avg.fouls_for, avg.fouls_for, avg.yellow_per_match / 2)

@@ -73,17 +73,23 @@ with col_card:
 
 st.divider()
 st.subheader("Jugadores con mayor riesgo de tarjeta")
-df_risk = pd.DataFrame(data["discipline_risk_players"])
-df_risk["Prob. de tarjeta (este partido) %"] = (df_risk["prob_booked"] * 100).round(1)
-df_risk = df_risk.rename(columns={
-    "player_name": "Jugador", "team_short_name": "Equipo", "card_proneness_index": "Índice histórico",
-})
-st.dataframe(
-    df_risk[["Jugador", "Equipo", "Índice histórico", "Prob. de tarjeta (este partido) %"]],
-    hide_index=True, use_container_width=True,
-    column_config={"Prob. de tarjeta (este partido) %": st.column_config.ProgressColumn(
-        format="%.1f%%", min_value=0, max_value=100)},
-)
+if not data["discipline_risk_players"]:
+    st.info(
+        "No disponible: el plan gratuito de datos reales no incluye alineaciones/estadísticas "
+        "por jugador. Los mercados de equipo (córners, tarjetas totales, 1X2) sí usan datos reales."
+    )
+else:
+    df_risk = pd.DataFrame(data["discipline_risk_players"])
+    df_risk["Prob. de tarjeta (este partido) %"] = (df_risk["prob_booked"] * 100).round(1)
+    df_risk = df_risk.rename(columns={
+        "player_name": "Jugador", "team_short_name": "Equipo", "card_proneness_index": "Índice histórico",
+    })
+    st.dataframe(
+        df_risk[["Jugador", "Equipo", "Índice histórico", "Prob. de tarjeta (este partido) %"]],
+        hide_index=True, use_container_width=True,
+        column_config={"Prob. de tarjeta (este partido) %": st.column_config.ProgressColumn(
+            format="%.1f%%", min_value=0, max_value=100)},
+    )
 
 with st.expander("Ver JSON completo de la simulación Monte Carlo"):
     st.json(mc)

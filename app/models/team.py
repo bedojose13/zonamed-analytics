@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, String
+from sqlalchemy import Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -13,6 +13,7 @@ class Team(Base):
     __tablename__ = "teams"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    external_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     short_name: Mapped[str] = mapped_column(String(10))
     city: Mapped[str] = mapped_column(String(60))

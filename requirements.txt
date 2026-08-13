@@ -22,6 +22,7 @@ joblib
 
 # ---- Utilidades ----
 python-dateutil
+httpx   # cliente HTTP para la ingesta real de datos (API-Football)
 
 # ---- Frontend ----
 streamlit

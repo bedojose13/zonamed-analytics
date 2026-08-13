@@ -39,7 +39,7 @@ class CornerRates:
 
 
 def compute_team_corner_rates(db: Session, team_id: int, before_match_id: int | None = None) -> CornerRates:
-    obs = get_recent_matches(db, team_id, before_match_id=before_match_id)
+    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True)
     if not obs:
         league_avg = load_league_averages().corners_for
         return CornerRates(league_avg, league_avg, 0.5)

@@ -8,6 +8,7 @@ from app.models.player import Player
 from app.models.prediction import Prediction
 from app.models.referee import Referee
 from app.models.rivalry import Rivalry
+from app.models.sync_state import SyncState
 from app.models.team import Team
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "MatchDisciplineStats",
     "PlayerMatchStat",
     "Prediction",
+    "SyncState",
     "MatchStatus",
     "PlayerPosition",
     "TacticalPosture",
