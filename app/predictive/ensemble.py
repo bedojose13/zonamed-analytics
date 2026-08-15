@@ -20,6 +20,7 @@ from app.predictive.poisson_1x2 import (
 from app.predictive.xgboost_model import blend_with_poisson, predict_goal_correction
 from app.predictive.cards_model import predict_team_cards
 from app.services.feature_engineering import MatchFeatureSet, build_feature_set
+from app.services.team_history import HistoryCache
 
 settings = get_settings()
 
@@ -33,8 +34,17 @@ def _expected_red_total(features: MatchFeatureSet) -> float:
 def generate_prediction(
     db: Session, match: Match, *, exclude_this_match: bool = True,
     corner_line: float | None = None, card_line: float | None = None,
+    history: HistoryCache | None = None,
 ) -> dict:
-    features = build_feature_set(db, match, exclude_this_match=exclude_this_match)
+    """`history`: pásalo (un `HistoryCache` ya construido) cuando el caller vaya a generar
+    predicciones para VARIOS partidos en el mismo request (ver app/api/routers/proximos.py y
+    jugados.py) — evita repetir decenas de consultas por partido contra la base remota. Si no
+    se pasa, se construye uno aquí mismo: incluso para un solo partido, 2 consultas en bloque
+    salen más baratas que las ~10 consultas puntuales por equipo que hacía el camino viejo."""
+    if history is None:
+        history = HistoryCache(db)
+
+    features = build_feature_set(db, match, exclude_this_match=exclude_this_match, history=history)
     feature_row = features.as_ml_row()
 
     xgb_home, xgb_away = predict_goal_correction(feature_row)

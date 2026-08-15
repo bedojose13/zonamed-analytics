@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models import Match, MatchStatus
 from app.schemas.match import PlayedMatchOut
 from app.services.prediction_service import get_or_create_prediction
+from app.services.team_history import HistoryCache
 
 router = APIRouter(prefix="/partidos", tags=["Partidos Jugados"])
 
@@ -47,10 +48,11 @@ def listar_partidos_jugados(
     stmt = stmt.limit(limit)
 
     matches = db.execute(stmt).scalars().all()
+    history = HistoryCache(db)
 
     out = []
     for match in matches:
-        prediction = get_or_create_prediction(db, match)
+        prediction = get_or_create_prediction(db, match, history=history)
         real_sign = _result_sign(match.home_goals, match.away_goals)
         pred_sign = _predicted_sign(prediction.prob_home_win, prediction.prob_draw, prediction.prob_away_win)
 

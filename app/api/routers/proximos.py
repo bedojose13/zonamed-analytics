@@ -9,6 +9,7 @@ from app.models import Match, MatchStatus
 from app.schemas.match import UpcomingMatchOut
 from app.schemas.prediction import PredictionSummaryOut
 from app.services.prediction_service import get_or_create_prediction
+from app.services.team_history import HistoryCache
 
 router = APIRouter(prefix="/partidos", tags=["Próximos Partidos"])
 
@@ -33,9 +34,14 @@ def listar_proximos_partidos(
 
     matches = db.execute(stmt).scalars().all()
 
+    # Un solo HistoryCache para todo el request: evita repetir ~10 consultas por partido contra
+    # la base remota cuando hay que generar varias predicciones nuevas de una — ver
+    # app/services/team_history.py.
+    history = HistoryCache(db)
+
     out = []
     for match in matches:
-        prediction = get_or_create_prediction(db, match)
+        prediction = get_or_create_prediction(db, match, history=history)
         out.append(UpcomingMatchOut(
             id=match.id, matchday=match.matchday, kickoff=match.kickoff, status=match.status,
             home_team=match.home_team, away_team=match.away_team, referee=match.referee,

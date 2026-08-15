@@ -8,14 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.models import Match, Prediction
 from app.predictive.ensemble import generate_prediction
+from app.services.team_history import HistoryCache
 
 
-def get_or_create_prediction(db: Session, match: Match, *, force_refresh: bool = False) -> Prediction:
+def get_or_create_prediction(db: Session, match: Match, *, force_refresh: bool = False,
+                              history: HistoryCache | None = None) -> Prediction:
     existing = db.execute(select(Prediction).where(Prediction.match_id == match.id)).scalars().first()
     if existing is not None and not force_refresh:
         return existing
 
-    result = generate_prediction(db, match, exclude_this_match=True)
+    result = generate_prediction(db, match, exclude_this_match=True, history=history)
     summary, mc, snapshot = result["summary"], result["monte_carlo"], result["feature_snapshot"]
 
     if existing is not None:
