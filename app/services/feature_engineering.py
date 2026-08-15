@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Match, Referee, Rivalry, Team
+from app.services.team_history import HistoryCache
 from app.services.xcards import (
     compute_team_discipline_rates,
     expected_match_cards,
@@ -81,23 +82,30 @@ def _get_rivalry(db: Session, team_a_id: int, team_b_id: int) -> Rivalry | None:
     return db.execute(stmt).scalars().first()
 
 
-def build_feature_set(db: Session, match: Match, *, exclude_this_match: bool = True) -> MatchFeatureSet:
+def build_feature_set(db: Session, match: Match, *, exclude_this_match: bool = True,
+                       history: HistoryCache | None = None) -> MatchFeatureSet:
     """Construye las features para `match`. Si `exclude_this_match` es True (default), las
     ventanas de forma reciente se cortan estrictamente antes de este partido — obligatorio
     quando se generan features de entrenamiento sobre partidos históricos, para no filtrar el
-    resultado del propio partido dentro de sus propias features."""
+    resultado del propio partido dentro de sus propias features.
+
+    `history`: pásalo (un `HistoryCache` ya construido) cuando vayas a llamar esta función una
+    vez POR CADA partido de un histórico grande (entrenamiento) — evita miles de consultas
+    individuales repetidas contra la base. Para servir una sola predicción en vivo, no hace
+    falta — se deja en None y cada función consulta la base directamente.
+    """
     before_id = match.id if exclude_this_match else None
 
     home_team: Team = match.home_team
     away_team: Team = match.away_team
     referee: Referee | None = match.referee
 
-    home_goal_rates = compute_team_goal_rates(db, home_team.id, before_id)
-    away_goal_rates = compute_team_goal_rates(db, away_team.id, before_id)
-    home_corner_rates = compute_team_corner_rates(db, home_team.id, before_id)
-    away_corner_rates = compute_team_corner_rates(db, away_team.id, before_id)
-    home_discipline_rates = compute_team_discipline_rates(db, home_team.id, before_id)
-    away_discipline_rates = compute_team_discipline_rates(db, away_team.id, before_id)
+    home_goal_rates = compute_team_goal_rates(db, home_team.id, before_id, history=history)
+    away_goal_rates = compute_team_goal_rates(db, away_team.id, before_id, history=history)
+    home_corner_rates = compute_team_corner_rates(db, home_team.id, before_id, history=history)
+    away_corner_rates = compute_team_corner_rates(db, away_team.id, before_id, history=history)
+    home_discipline_rates = compute_team_discipline_rates(db, home_team.id, before_id, history=history)
+    away_discipline_rates = compute_team_discipline_rates(db, away_team.id, before_id, history=history)
 
     fatigue = altitude_fatigue_penalty(match.venue_altitude_m, away_team.altitude_m, match.away_rest_days)
 
@@ -106,7 +114,7 @@ def build_feature_set(db: Session, match: Match, *, exclude_this_match: bool = T
     exp_home_fouls, exp_away_fouls = expected_match_fouls(home_discipline_rates, away_discipline_rates)
 
     rivalry = _get_rivalry(db, home_team.id, away_team.id)
-    h2h_mult = h2h_intensity_multiplier(db, home_team.id, away_team.id, rivalry)
+    h2h_mult = h2h_intensity_multiplier(db, home_team.id, away_team.id, rivalry, history=history)
     exp_home_cards, exp_away_cards = expected_match_cards(exp_home_fouls, exp_away_fouls, referee, h2h_mult)
 
     return MatchFeatureSet(

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.models import MatchCornerStats, MatchStatus, Match
 from app.services import rate_model
 from app.services.league_baseline import load_league_averages
-from app.services.team_history import get_recent_matches
+from app.services.team_history import HistoryCache, get_recent_matches
 from app.services.weighting import exponential_weighted_average
 
 
@@ -38,8 +38,9 @@ class CornerRates:
     wing_play_index: float
 
 
-def compute_team_corner_rates(db: Session, team_id: int, before_match_id: int | None = None) -> CornerRates:
-    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True)
+def compute_team_corner_rates(db: Session, team_id: int, before_match_id: int | None = None,
+                               history: HistoryCache | None = None) -> CornerRates:
+    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True, history=history)
     if not obs:
         league_avg = load_league_averages().corners_for
         return CornerRates(league_avg, league_avg, 0.5)
@@ -47,15 +48,18 @@ def compute_team_corner_rates(db: Session, team_id: int, before_match_id: int | 
     xc_for = exponential_weighted_average([o.corners_for for o in obs])
     xc_against = exponential_weighted_average([o.corners_against for o in obs])
 
-    stmt = (
-        select(MatchCornerStats.wing_play_index)
-        .join(Match, Match.id == MatchCornerStats.match_id)
-        .where(MatchCornerStats.team_id == team_id, Match.status == MatchStatus.FINISHED)
-        .order_by(Match.kickoff.desc())
-        .limit(10)
-    )
-    wing_values = [row[0] for row in db.execute(stmt).all()]
-    wing_index = sum(wing_values) / len(wing_values) if wing_values else 0.5
+    if history is not None:
+        wing_index = history.wing_play_index(team_id)
+    else:
+        stmt = (
+            select(MatchCornerStats.wing_play_index)
+            .join(Match, Match.id == MatchCornerStats.match_id)
+            .where(MatchCornerStats.team_id == team_id, Match.status == MatchStatus.FINISHED)
+            .order_by(Match.kickoff.desc())
+            .limit(10)
+        )
+        wing_values = [row[0] for row in db.execute(stmt).all()]
+        wing_index = sum(wing_values) / len(wing_values) if wing_values else 0.5
 
     return CornerRates(xc_for=xc_for, xc_against=xc_against, wing_play_index=wing_index)
 

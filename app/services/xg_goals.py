@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.services import rate_model
 from app.services.league_baseline import load_league_averages
-from app.services.team_history import get_recent_matches
+from app.services.team_history import HistoryCache, get_recent_matches
 from app.services.weighting import exponential_weighted_average
 
 HOME_ADVANTAGE = 1.12  # multiplicador liga-wide: los locales anotan ~12% más que los visitantes
@@ -23,8 +23,9 @@ class GoalRates:
     goals_against: float
 
 
-def compute_team_goal_rates(db: Session, team_id: int, before_match_id: int | None = None) -> GoalRates:
-    obs = get_recent_matches(db, team_id, before_match_id=before_match_id)
+def compute_team_goal_rates(db: Session, team_id: int, before_match_id: int | None = None,
+                             history: HistoryCache | None = None) -> GoalRates:
+    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, history=history)
     if not obs:
         league_avg = load_league_averages().goals_for
         return GoalRates(league_avg, league_avg)

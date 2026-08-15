@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.models import Referee, Rivalry
 from app.services import rate_model
 from app.services.league_baseline import load_league_averages
-from app.services.team_history import get_h2h_matches, get_recent_matches
+from app.services.team_history import HistoryCache, get_h2h_matches, get_recent_matches
 from app.services.weighting import exponential_weighted_average
 
 
@@ -49,8 +49,9 @@ class DisciplineRates:
     cards_for: float
 
 
-def compute_team_discipline_rates(db: Session, team_id: int, before_match_id: int | None = None) -> DisciplineRates:
-    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True)
+def compute_team_discipline_rates(db: Session, team_id: int, before_match_id: int | None = None,
+                                   history: HistoryCache | None = None) -> DisciplineRates:
+    obs = get_recent_matches(db, team_id, before_match_id=before_match_id, require_full_stats=True, history=history)
     if not obs:
         avg = load_league_averages()
         return DisciplineRates(avg.fouls_for, avg.fouls_for, avg.yellow_per_match / 2)
@@ -67,10 +68,11 @@ def referee_strictness(referee: Referee | None) -> float:
     return referee.avg_yellow_per_match / load_league_averages().yellow_per_match
 
 
-def h2h_intensity_multiplier(db: Session, team_a_id: int, team_b_id: int, static_rivalry: Rivalry | None) -> float:
+def h2h_intensity_multiplier(db: Session, team_a_id: int, team_b_id: int, static_rivalry: Rivalry | None,
+                              history: HistoryCache | None = None) -> float:
     static_index = static_rivalry.intensity_index if static_rivalry else 1.0
 
-    h2h_matches = get_h2h_matches(db, team_a_id, team_b_id, limit=6)
+    h2h_matches = get_h2h_matches(db, team_a_id, team_b_id, limit=6, history=history)
     if len(h2h_matches) < 2:
         return static_index
 
