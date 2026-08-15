@@ -2,8 +2,9 @@
 
 Esta guía deja la app accesible desde cualquier lugar con datos móviles, en una URL fija, sin
 necesidad de que tu PC esté encendida. Usa 4 servicios gratuitos: **Neon** (Postgres),
-**Render** (API FastAPI), **Streamlit Community Cloud** (frontend) y **API-Football** (datos
-reales de la Dimayor, temporada 2024 — el plan gratuito no cubre la temporada en curso).
+**Render** (API FastAPI), **Streamlit Community Cloud** (frontend) y **Highlightly** (datos
+reales de la Dimayor — a diferencia de otras APIs probadas, su plan gratuito SÍ cubre la
+temporada en curso, incluyendo partidos realmente por jugar).
 
 ---
 
@@ -28,15 +29,14 @@ git push -u origin main
 
 ---
 
-## 3. Datos reales: API-Football (gratis)
+## 3. Datos reales: Highlightly (gratis)
 
-1. Entra a [dashboard.api-football.com/register](https://dashboard.api-football.com/register)
-   y crea cuenta gratis.
+1. Entra a [highlightly.net/dashboard](https://highlightly.net/dashboard) (o vía RapidAPI) y
+   crea cuenta gratis (sin tarjeta).
 2. Copia tu **API Key** del dashboard.
-3. **Importante — límite real:** el plan gratis da 100 llamadas/día y 10 llamadas/minuto, y
-   **no cubre la temporada en curso** (solo 2022-2024). La app usa la temporada 2024 completa
-   como base histórica real — ver `app/scripts/sync_real_data.py` para el detalle de por qué y
-   cómo se reparte el backfill en varios días.
+3. **Límite real:** el plan gratis (BASIC) da 100 llamadas/día, pero a diferencia de otras APIs
+   probadas, incluye la temporada 2026 completa (en curso) — ver `app/scripts/sync_highlightly.py`
+   para el detalle de cómo se reparte el backfill de estadísticas por partido en varios días.
 
 ---
 
@@ -49,7 +49,7 @@ git push -u origin main
    - `ZONAMED_DATABASE_URL`: el connection string de Neon, pero con el prefijo cambiado a
      `postgresql+psycopg://` (no `postgresql://`). Ejemplo:
      `postgresql+psycopg://usuario:clave@ep-xxxx.neon.tech/neondb?sslmode=require`
-   - `ZONAMED_FOOTBALL_API_KEY`: tu API key de API-Football del paso 3.
+   - `ZONAMED_HIGHLIGHTLY_API_KEY`: tu API key de Highlightly del paso 3.
    - `ZONAMED_ADMIN_SYNC_TOKEN`: inventa cualquier texto secreto (ej. una contraseña larga
      aleatoria) — lo vas a necesitar en el paso 6 para el cron.
 4. Confirma y deja que Render construya la imagen Docker (unos minutos la primera vez).
@@ -102,16 +102,6 @@ llama a `POST /admin/sync` una vez al día automáticamente, gratis, sin depende
 
 ---
 
-## Nota sobre "Próximos Partidos"
-
-Como la app usa la temporada **2024 completa** (ya terminada) en vez de la temporada en curso
-(bloqueada en el plan gratuito de la API), **todos** los partidos están FINALIZADOS — la vista
-"Próximos Partidos" quedará vacía siempre con este dataset, y eso es esperado, no un error. La
-vista útil para auditar el motor con datos 100% reales es **"Partidos Jugados"** (real vs.
-proyectado). Si más adelante quieres partidos realmente futuros, hay que pasar al plan pago de
-API-Football (cubre la temporada en curso) — avísame si llegas a ese punto.
-
----
 
 ## Actualizar la app después de cambios
 

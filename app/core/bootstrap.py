@@ -2,14 +2,14 @@
 para correr los scripts a mano antes del primer arranque.
 
 Se ejecuta en el evento `startup` de FastAPI (ver app/api/main.py) y es IDEMPOTENTE Y
-RESUMIBLE, a diferencia de la versión anterior basada en datos sintéticos:
-  - `sync_real_data.run()` SIEMPRE se corre (no solo si la base está vacía): trae equipos y
-    calendario reales una sola vez, y cada corrida avanza un poco más el backfill de
-    estadísticas por partido (córners/faltas/tarjetas), respetando el cupo diario de 100
-    llamadas de la API gratuita — ver app/services/sync_state.py. Como el free tier de Render
-    reinicia el proceso cada vez que el servicio despierta de dormir, esto hace que el backfill
-    histórico avance solo con el tráfico normal, sin necesitar un cron aparte (aunque también
-    se puede forzar vía POST /admin/sync, ver app/api/main.py).
+RESUMIBLE:
+  - `sync_highlightly.run()` SIEMPRE se corre: re-trae el calendario completo (barato, ~4
+    llamadas) para mantener resultados/estados al día, y cada corrida avanza un poco más el
+    backfill de estadísticas por partido (córners/faltas/tarjetas), respetando el cupo diario
+    de 100 llamadas del plan gratuito — ver app/services/sync_state.py. Como el free tier de
+    Render reinicia el proceso cada vez que el servicio despierta de dormir, esto hace que el
+    backfill avance solo con el tráfico normal, sin necesitar un cron aparte (aunque también se
+    puede forzar vía POST /admin/sync, ver app/api/main.py).
   - El (re)entrenamiento de modelos también se corre siempre: es barato (no llama a la API
     externa) y así los modelos de córners/tarjetas van mejorando día a día conforme el backfill
     avanza, en vez de quedar congelados con el primer entrenamiento.
@@ -31,11 +31,11 @@ status: dict = {"stage": "pending", "detail": ""}
 def bootstrap_if_needed() -> None:
     init_db()
 
-    status.update(stage="syncing", detail="Sincronizando datos reales (API-Football)...")
+    status.update(stage="syncing", detail="Sincronizando datos reales (Highlightly, temporada en curso)...")
     print("[bootstrap] Sincronizando datos reales...")
-    from app.scripts import sync_real_data
+    from app.scripts import sync_highlightly
 
-    sync_real_data.run()
+    sync_highlightly.run()
 
     status.update(stage="training", detail="Entrenando/recalibrando el ensemble...")
     print("[bootstrap] Entrenando el ensemble...")
