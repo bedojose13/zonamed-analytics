@@ -60,7 +60,7 @@ def trigger_sync(token: str) -> dict:
     que avance el backfill histórico incluso en días sin visitas a la app."""
     if not settings.admin_sync_token or token != settings.admin_sync_token:
         raise HTTPException(status_code=403, detail="Token inválido o ZONAMED_ADMIN_SYNC_TOKEN no configurado.")
-    if bootstrap.status.get("stage") in {"syncing", "training"}:
+    if bootstrap.status.get("stage") in {"syncing", "training", "predicting"}:
         return {"status": "already_running", "bootstrap": bootstrap.status}
     bootstrap.bootstrap_in_background()
     return {"status": "sync_started", "bootstrap": bootstrap.status}

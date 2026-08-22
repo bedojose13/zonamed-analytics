@@ -20,8 +20,11 @@ class Settings(BaseSettings):
     rolling_window_matches: int = 20
     exponential_half_life_matches: float = 5.0  # partidos hasta que el peso cae a la mitad
 
-    # Simulación Monte Carlo
-    monte_carlo_iterations: int = 100_000
+    # Simulación Monte Carlo. 30,000 en vez de 100,000: el error estándar de una probabilidad
+    # p con 30k tiradas es sqrt(p(1-p)/30000) ≤ 0.29% en el peor caso — de sobra para mostrar
+    # líneas de mercado con 1 decimal — y reduce bastante la carga de CPU/memoria por partido,
+    # relevante en hosts con recursos limitados (ver app/core/bootstrap.py, pregenerate_predictions).
+    monte_carlo_iterations: int = 30_000
     monte_carlo_random_seed: int = 42
 
     # Líneas de mercado por defecto (se pueden pedir otras vía API)

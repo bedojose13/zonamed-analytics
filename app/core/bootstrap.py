@@ -13,6 +13,11 @@ RESUMIBLE:
   - El (re)entrenamiento de modelos también se corre siempre: es barato (no llama a la API
     externa) y así los modelos de córners/tarjetas van mejorando día a día conforme el backfill
     avanza, en vez de quedar congelados con el primer entrenamiento.
+  - Al final se PRE-GENERAN las predicciones de próximos partidos + histórico reciente (ver
+    app/services/prediction_service.py::pregenerate_predictions), para que los endpoints de
+    lectura nunca tengan que correr una simulación Monte Carlo en vivo dentro de un request
+    HTTP — eso fue justamente lo que causaba errores 500 intermitentes en el plan gratuito de
+    Render (recursos limitados) cuando varios partidos nuevos pedían predicción de una.
 
 Puede desactivarse con `ZONAMED_AUTO_BOOTSTRAP=false` si prefieres correr los scripts tú mismo.
 """
@@ -42,6 +47,15 @@ def bootstrap_if_needed() -> None:
     from app.scripts import train_models
 
     train_models.run()
+
+    status.update(stage="predicting", detail="Pre-generando predicciones de próximos partidos...")
+    print("[bootstrap] Pre-generando predicciones...")
+    from app.core.database import session_scope
+    from app.services.prediction_service import pregenerate_predictions
+
+    with session_scope() as db:
+        n = pregenerate_predictions(db)
+    print(f"[bootstrap] {n} predicciones nuevas generadas.")
 
     status.update(stage="ready", detail="Listo.")
 
