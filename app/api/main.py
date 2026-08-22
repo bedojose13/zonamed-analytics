@@ -7,8 +7,11 @@ Documentación interactiva autogenerada: http://127.0.0.1:8000/docs
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import traceback
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routers import analisis, jugados, proximos
 from app.core import bootstrap
@@ -30,6 +33,21 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+# Diagnóstico temporal: guarda el traceback completo del último error 500 en memoria, expuesto
+# vía GET /admin/last-error?token=... — Render (plan free) no da acceso directo a logs desde
+# aquí, así que esto es la única forma de ver QUÉ falló en producción cuando algo solo
+# reproduce ahí y nunca en local contra la misma base. Quitar una vez diagnosticado.
+_last_error: dict = {}
+
+
+@app.exception_handler(Exception)
+async def _capture_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    _last_error["path"] = str(request.url)
+    _last_error["traceback"] = traceback.format_exc()
+    _last_error["type"] = type(exc).__name__
+    _last_error["message"] = str(exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 app.include_router(proximos.router)
 app.include_router(analisis.router)
@@ -74,3 +92,12 @@ def test_espn_connectivity(token: str) -> dict:
     if not settings.admin_sync_token or token != settings.admin_sync_token:
         raise HTTPException(status_code=403, detail="Token inválido.")
     return espn_api.test_connectivity()
+
+
+@app.get("/admin/last-error", tags=["Admin"])
+def last_error(token: str) -> dict:
+    """Traceback completo del último error 500 no manejado, capturado en memoria (ver arriba).
+    Diagnóstico temporal mientras no haya acceso directo a logs de Render desde aquí."""
+    if not settings.admin_sync_token or token != settings.admin_sync_token:
+        raise HTTPException(status_code=403, detail="Token inválido.")
+    return _last_error or {"message": "Sin errores capturados todavía."}
